@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report1.html</h1>
+    <p>Report generated on 10-Mar-2022 at 15:58:16 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.0.1"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19044-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "1.11.0"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.2</td></tr></table>
+    <h2>Summary</h2>
+    <p>19 tests ran in 267.14 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">17 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">0 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/test_broken_images_page.py::test_broken_images</td>
+          <td class="col-duration">10.41</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;1eafccfb761523f9c1cc8b10331f864d&quot;)&gt;<br/><br/>    def test_broken_images(browser):<br/>        print(&#x27;&#x27;&#x27;   Scenario: Test if in the Broken Images page there are some broken images<br/>            Given I launch the page &quot;https://the-internet.herokuapp.com/broken_images&quot; in the Chrome browser<br/>            When I verify if in the page are some broken images<br/>            Then I should not find any broken images&#x27;&#x27;&#x27;)<br/>        broken_images_page = BrokenImagesPage(browser)<br/>        broken_images_page.load_page()<br/>        generic = GenericMethods(browser)<br/>&gt;       assert generic.is_broken_images_on_page(), &#x27;The page contains broken images&#x27;<br/><span class="error">E       AssertionError: The page contains broken images</span><br/><span class="error">E       assert False</span><br/><span class="error">E        +  where False = &lt;bound method GenericMethods.is_broken_images_on_page of &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD5AB0&gt;&gt;()</span><br/><span class="error">E        +    where &lt;bound method GenericMethods.is_broken_images_on_page of &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD5AB0&gt;&gt; = &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD5AB0&gt;.is_broken_images_on_page</span><br/><br/>tests\test_broken_images_page.py:28: AssertionError<br/> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the Broken Images page there are some broken images 
+        Given I launch the page &quot;https://the-internet.herokuapp.com/broken_images&quot; in the Chrome browser
+        When I verify if in the page are some broken images
+        Then I should not find any broken images
+            This page contains: 4 images
+    Broken images: 
+[&#x27;&lt;img src=&quot;asdf.jpg&quot;&gt;&#x27;, &#x27;&lt;img src=&quot;hjkl.jpg&quot;&gt;&#x27;]
+<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">tests/test_secure-area_page.py::test_go_back_after_logout</td>
+          <td class="col-duration">8.46</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">browser = &lt;selenium.webdriver.chrome.webdriver.WebDriver (session=&quot;bd59ed28bacd73d04c9f5399b8d598d0&quot;)&gt;<br/><br/>    def test_go_back_after_logout(browser):<br/>        print(&#x27;&#x27;&#x27;   Scenario: Test if the logout functionality is secure<br/>        Given I&#x27;m successfully logged in<br/>        and I click Logout button<br/>        and after the login page is displayed<br/>        When I navigate backward using the Back button from the browser<br/>        Then the browser should remain in the login page<br/>        and should ask me to login again&#x27;&#x27;&#x27;)<br/>        secure_page = SecureAreaPage(browser)<br/>        secure_page.load_page()<br/>        generic = GenericMethods(browser)<br/>        secure_page_url = generic.get_current_url()<br/>        secure_page.click_logout_button()<br/>        browser.back()<br/>&gt;       assert generic.get_current_url() is secure_page_url, \<br/>            &#x27;Unsecure logout: If we go back after logout, we are logged in back&#x27;<br/><span class="error">E       AssertionError: Unsecure logout: If we go back after logout, we are logged in back</span><br/><span class="error">E       assert &#x27;https://the-internet.herokuapp.com/secure&#x27; is &#x27;https://the-internet.herokuapp.com/secure&#x27;</span><br/><span class="error">E        +  where &#x27;https://the-internet.herokuapp.com/secure&#x27; = &lt;bound method GenericMethods.get_current_url of &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD40A0&gt;&gt;()</span><br/><span class="error">E        +    where &lt;bound method GenericMethods.get_current_url of &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD40A0&gt;&gt; = &lt;utils.generic_methods.GenericMethods object at 0x00000232C7BD40A0&gt;.get_current_url</span><br/><br/>tests\test_secure-area_page.py:56: AssertionError<br/> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the logout functionality is secure
+    Given I&#x27;m successfully logged in 
+    and I click Logout button
+    and after the login page is displayed
+    When I navigate backward using the Back button from the browser
+    Then the browser should remain in the login page
+    and should ask me to login again
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_ab_test_page.py::test_page_is_displayed</td>
+          <td class="col-duration">18.94</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the A/B Test page is displayed if I launch the page 10 times in a row
+    Given I type &quot;https://the-internet.herokuapp.com/abtest&quot; in the Chrome address-bar
+    When I launch the page
+    Then the page should open
+    and the Title text should be visible and displaying the correct text
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+A/B Test Control
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_ab_test_page.py::test_broken_images</td>
+          <td class="col-duration">7.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the A/B Test page there are some broken images 
+        Given I type &quot;https://the-internet.herokuapp.com/abtest&quot; in the Chrome address-bar
+        When I launch the page
+        and verify if in the page are some broken images
+        Then I should not find any broken images
+            This page contains: 1 images
+    Broken images: 
+[]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_add_remove_elements_page.py::test_page_is_displayed</td>
+          <td class="col-duration">15.29</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the Add Remove Elements page is displayed 
+        Given I type &quot;https://the-internet.herokuapp.com/add_remove_elements/&quot; in the Chrome address-bar
+        When I launch the page
+        Then the page should open
+        and the Title text should be visible and displaying the correct text
+        and the Add Element button should be displayed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_add_remove_elements_page.py::test_buttons_works</td>
+          <td class="col-duration">17.29</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the Add Remove Elements page is displayed 
+        Given I launch the page &quot;https://the-internet.herokuapp.com/add_remove_elements/&quot; in the Chrome browser
+        When I click the Add Element button once
+        Then one Delete button should appear
+        and When I click the Delete button once
+        Then the clicked Delete button should disappear
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_add_remove_elements_page.py::test_delete_buttons_number</td>
+          <td class="col-duration">29.81</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the Add Remove Elements page the number of delete buttons are the same 
+        with the number of times I clicked the Add Element button 
+        Given I launch the page &quot;https://the-internet.herokuapp.com/add_remove_elements/&quot; in the Chrome browser
+        When I click the Add Element button certain number of times
+        Then the number of Delete buttons displayed on the page should be the same 
+        with the number of times I clicked the Add Element Button
+        and When I click the Delete button several times
+        Then the clicked Delete buttons should disappear
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_add_remove_elements_page.py::test_broken_images</td>
+          <td class="col-duration">7.74</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the Add Remove Elements page there are some broken images 
+        Given I launch the page &quot;https://the-internet.herokuapp.com/add_remove_elements/&quot; in the Chrome browser
+        When I verify if in the page are some broken images
+        Then I should not find any broken images
+            This page contains: 1 images
+    Broken images: 
+[]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_broken_images_page.py::test_page_is_displayed</td>
+          <td class="col-duration">7.64</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the Broken Images page is displayed
+    Given I type &quot;https://the-internet.herokuapp.com/broken_images&quot; in the Chrome address-bar
+    When I launch the page
+    Then the page should open
+    and the Title text should be visible and displaying the correct text
+    and 3 images should be displayed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_home_page.py::test_page_is_displayed</td>
+          <td class="col-duration">8.82</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the the-internet.herokuapp.com page is displayed 
+        Given I type &quot;https://the-internet.herokuapp.com/&quot; in the Chrome address-bar
+        When I launch the page
+        Then the page should open
+        and the Header text should be visible and containing the correct text
+        and the Title text should be visible and containing the correct text
+        and if I scroll to the bottom of the page I should see the footer
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_home_page.py::test_links_are_displayed</td>
+          <td class="col-duration">8.08</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the the-internet.herokuapp.com page, the correct links is displayed 
+        mGiven I type &quot;https://the-internet.herokuapp.com/&quot; in the Chrome address-bar
+        When I launch the page
+        Then the page should open
+        and I should see the A/B Testing, Add/Remove Elements, 
+        Broken Images and Form Authentication links displayed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_home_page.py::test_links_are_working</td>
+          <td class="col-duration">9.84</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the the-internet.herokuapp.com page the links are working 
+        Given I type &quot;https://the-internet.herokuapp.com/&quot; in the Chrome address-bar
+        When I launch the page
+        Then the page should open
+        and the links A/B Testing, Add/Remove Elements, 
+        Broken Images and Form Authentication should be clickable
+        and if I click them I should be redirected to the correct target page
+https://the-internet.herokuapp.com/
+https://the-internet.herokuapp.com/abtest
+https://the-internet.herokuapp.com/
+https://the-internet.herokuapp.com/broken_images
+https://the-internet.herokuapp.com/
+https://the-internet.herokuapp.com/add_remove_elements/
+https://the-internet.herokuapp.com/
+https://the-internet.herokuapp.com/login
+https://the-internet.herokuapp.com/
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_home_page.py::test_broken_images</td>
+          <td class="col-duration">7.92</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if in the the-internet.herokuapp.com page there are some broken images 
+        Given I type &quot;https://the-internet.herokuapp.com/&quot; in the Chrome address-bar
+        When I launch the page
+        and verify if in the page are some broken images
+        Then I should not find any broken images
+            This page contains: 1 images
+    Broken images: 
+[]
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_login_page.py::test_page_is_displayed</td>
+          <td class="col-duration">7.64</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the Form Authentication page is displayed
+    Given I type &quot;https://the-internet.herokuapp.com/login&quot; in the Chrome address-bar
+    When I launch the page
+    Then the page should open
+    and the Title text should be visible and displaying the correct text
+    and the username field should appear
+    and the password field should appear
+    and the Login button should be displayed
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_login_page.py::test_login_with_valid_credentials</td>
+          <td class="col-duration">16.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test Login with valid credentials
+    Given I launch the &quot;https://the-internet.herokuapp.com/login&quot; page in the Chrome address-bar
+    When I type the correct username
+    and I type the correct password
+    and I click the Login button
+    Then the secure page should open
+    and a flash message should appear to confirm the successful login
+        Flash message: You logged into a secure area!
+×
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_login_page.py::test_login_with_invalid_password</td>
+          <td class="col-duration">33.40</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test Login with valid username and invalid password
+    Given I launch the &quot;https://the-internet.herokuapp.com/login&quot; page in the Chrome address-bar
+    When I type the correct username
+    and I type an incorrect password
+    and I click the Login button
+    Then the borwser should still display the login page
+    and a flash message should appear to warn me that I entered an incorrect password
+[&#x27;z?&amp;EAm]0MH&#x27;, &#x27;PHd2J%0Mp%Ps&#x27;, &#x27;#tbPc@WX|oY|+-I&#x27;, &#x27;AD^ZQ7)@||X|Ok&#x27;, &#x27;g?MJD^b9J&#x27;, &#x27;SKSaPv,zn;9X_Wc&#x27;, &#x27;$^xZAeqm)&#x27;, &#x27;RZ[rE_JoF&#x27;, &#x27;i|W=V^NreI}{HA&#x27;, &#x27;5YycPcZ,j/G&#x27;]
+z?&amp;EAm]0MH
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+PHd2J%0Mp%Ps
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+#tbPc@WX|oY|+-I
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+AD^ZQ7)@||X|Ok
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+g?MJD^b9J
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+SKSaPv,zn;9X_Wc
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+$^xZAeqm)
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+RZ[rE_JoF
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+i|W=V^NreI}{HA
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+5YycPcZ,j/G
+https://the-internet.herokuapp.com/login
+        Flash message: Your password is invalid!
+×
+None
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_login_page.py::test_login_with_invalid_username</td>
+          <td class="col-duration">33.58</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test Login with invalid credentials
+    Given I launch the &quot;https://the-internet.herokuapp.com/login&quot; page in the Chrome address-bar
+    When I type a random invalid username
+    and I type an random invalid password
+    and I click the Login button
+    Then the borwser should still display the login page
+    and a flash message should appear to warn me that I entered an incorrect username
+14
+Generated usermane: pveXevmSDcQOZN
+14
+Generated usermane: PmYzblRsnHpGeA
+15
+Generated usermane: GWpvYFPGbyVACJJ
+12
+Generated usermane: HkOVcLiLWXXM
+15
+Generated usermane: tyRVGFHqfEvvoPU
+13
+Generated usermane: ZMHpZLCYBjtlF
+12
+Generated usermane: psUZaBOmGSyT
+13
+Generated usermane: DFUmZKUIkYgvh
+14
+Generated usermane: VYNmsOVjpzkilf
+13
+Generated usermane: zGVDHzqyTpLgj
+pveXevmSDcQOZN
+5IB}&gt;x_xm@
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+PmYzblRsnHpGeA
+T3fw)[0!KjqQF7
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+GWpvYFPGbyVACJJ
+]Q7Nq8MhOh
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+HkOVcLiLWXXM
+o+&lt;&gt;QB6?idq
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+tyRVGFHqfEvvoPU
+w}OQpOK&amp;HAzua
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+ZMHpZLCYBjtlF
+Gmf8Q&amp;;s-H@
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+psUZaBOmGSyT
+oyIhQ+Kv
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+DFUmZKUIkYgvh
+sE.7zGB6$?_9J
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+VYNmsOVjpzkilf
+?7jLuG2B9z.,SH
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+zGVDHzqyTpLgj
+U?L0lOE&gt;rtY}}
+https://the-internet.herokuapp.com/login
+        Flash message: Your username is invalid!
+×
+None
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_secure-area_page.py::test_logout_page_is_displayed</td>
+          <td class="col-duration">8.32</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the Secure Area page is displayed
+    Given I type &quot;https://the-internet.herokuapp.com/login&quot; in the Chrome address-bar
+    When I successfully login
+    Then the Secure Area page should open
+    and a flash message should appear to confirm the successful login
+    and the Title text should be visible and displaying the correct text
+    and the Logout button should be displayed
+        Flash message: You logged into a secure area!
+×
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">tests/test_secure-area_page.py::test_logout</td>
+          <td class="col-duration">9.09</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> -----------------------------Captured stderr setup------------------------------ <br/>
+
+====== WebDriver manager ======
+Current google-chrome version is 99.0.4844
+Get LATEST chromedriver version for 99.0.4844 google-chrome
+Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]
+<br/> -------------------------------Captured log setup------------------------------- <br/>INFO     WDM:logger.py:26 
+
+INFO     WDM:logger.py:26 ====== WebDriver manager ======
+INFO     WDM:logger.py:26 Current google-chrome version is 99.0.4844
+INFO     WDM:logger.py:26 Get LATEST chromedriver version for 99.0.4844 google-chrome
+INFO     WDM:logger.py:26 Trying to download new driver from https://chromedriver.storage.googleapis.com/99.0.4844.51/chromedriver_win32.zip
+INFO     WDM:logger.py:26 Driver has been saved in cache [C:\Users\icoro\.wdm\drivers\chromedriver\win32\99.0.4844.51]<br/> ------------------------------Captured stdout call------------------------------ <br/>   Scenario: Test if the logout from the Secure Area page is working
+    Given I&#x27;m successfully logged in 
+    When I click Logout button
+    Then the Login page should open
+    and a flash message should appear to confirm the successful logout
+        Flash message: You logged out of the secure area!
+×
+<br/></div></td></tr></tbody></table></body></html>
